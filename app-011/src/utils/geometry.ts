@@ -15,6 +15,10 @@ export function polygonArea(polygon: Pt[]): number {
   return Math.abs(area) / 2;
 }
 
+export function roomAreaM2(room: Room): number {
+  return polygonArea(room.polygon) / 1000000;
+}
+
 export function polygonPerimeter(polygon: Pt[]): number {
   let perim = 0;
   const n = polygon.length;

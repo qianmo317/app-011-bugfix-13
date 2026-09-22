@@ -1,7 +1,7 @@
 import { useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStore } from '../store';
-import { polygonArea, getWallSegments, formatMm } from '../utils/geometry';
+import { roomAreaM2, getWallSegments, formatMm } from '../utils/geometry';
 import { calcMaterials } from '../utils/materialCalc';
 
 export default function PrintView() {
@@ -66,7 +66,7 @@ export default function PrintView() {
               const points = room.polygon.map((p) => `${p.x},${p.y}`).join(' ');
               const centerX = room.polygon.reduce((s, p) => s + p.x, 0) / room.polygon.length;
               const centerY = room.polygon.reduce((s, p) => s + p.y, 0) / room.polygon.length;
-              const area = polygonArea(room.polygon);
+              const area = roomAreaM2(room);
 
               return (
                 <g key={room.id}>
@@ -115,7 +115,7 @@ export default function PrintView() {
             })}
           </svg>
           <div style={{ marginTop: 16, fontSize: 12, color: '#666' }}>
-            比例: 1:50 (A3纸张) | 总面积: {plan.rooms.reduce((s, r) => s + polygonArea(r.polygon), 0).toFixed(2)}m²
+            比例: 1:50 (A3纸张) | 总面积: {plan.rooms.reduce((s, r) => s + roomAreaM2(r), 0).toFixed(2)}m²
           </div>
         </div>
 

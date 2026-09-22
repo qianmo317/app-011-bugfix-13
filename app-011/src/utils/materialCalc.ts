@@ -1,5 +1,5 @@
 import type { Room, Opening, MatSpec, MaterialResult } from '../types';
-import { polygonArea, polygonPerimeter } from './geometry';
+import { polygonPerimeter, roomAreaM2 } from './geometry';
 
 export const DEFAULT_MATS: MatSpec[] = [
   { id: 'paint', name: '乳胶漆', unit: 'm2', coverage: 12, lossRate: 0.05, price: 35 },
@@ -11,6 +11,25 @@ export const DEFAULT_MATS: MatSpec[] = [
   { id: 'skirting', name: '踢脚线', unit: 'm', coverage: 1, lossRate: 0.03, price: 25 },
 ];
 
+export interface RoomWallCalc {
+  perimMm: number;
+  wallAreaMm2: number;
+  openingAreaMm2: number;
+  netAreaMm2: number;
+  netAreaM2: number;
+}
+
+// 墙面净面积的唯一算法：周长×层高 - 全部门窗洞口，清单与油漆明细共用
+export function calcRoomWall(room: Room, openings: Opening[]): RoomWallCalc {
+  const perimMm = polygonPerimeter(room.polygon);
+  const wallAreaMm2 = perimMm * room.heightMm;
+  const openingAreaMm2 = openings
+    .filter((o) => o.roomId === room.id)
+    .reduce((sum, o) => sum + o.widthMm * o.heightMm, 0);
+  const netAreaMm2 = Math.max(0, wallAreaMm2 - openingAreaMm2);
+  return { perimMm, wallAreaMm2, openingAreaMm2, netAreaMm2, netAreaM2: netAreaMm2 / 1000000 };
+}
+
 export function calcMaterials(
   rooms: Room[],
   openings: Opening[],
@@ -20,29 +39,14 @@ export function calcMaterials(
   const matMap = new Map(materials.map((m) => [m.id, m]));
 
   for (const room of rooms) {
-    let minX = Number.POSITIVE_INFINITY;
-    let maxX = Number.NEGATIVE_INFINITY;
-    let minY = Number.POSITIVE_INFINITY;
-    let maxY = Number.NEGATIVE_INFINITY;
-    for (const p of room.polygon) {
-      if (p.x < minX) minX = p.x;
-      if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y;
-      if (p.y > maxY) maxY = p.y;
-    }
-    const widthMm = maxX - minX;
-    const depthMm = maxY - minY;
-    const boxAreaMm2 = widthMm * depthMm;
-    const area = Math.abs(boxAreaMm2) * 1000000;
-    const perim = polygonPerimeter(room.polygon);
-    const wallArea = perim * room.heightMm;
+    const area = roomAreaM2(room);
+    const wall = calcRoomWall(room, openings);
+    const perim = wall.perimMm;
 
     const roomOpenings = openings.filter((o) => o.roomId === room.id);
-    const openingArea = roomOpenings.reduce((sum, o) => sum + o.widthMm * o.heightMm, 0);
     const doorOpenings = roomOpenings.filter((o) => o.type === 'door' || o.type === 'sliding');
     const doorWidth = doorOpenings.reduce((sum, o) => sum + o.widthMm, 0);
 
-    const netWallArea = Math.max(0, wallArea - openingArea);
     const netSkirtingLen = Math.max(0, perim - doorWidth);
 
     // Floor
@@ -70,19 +74,8 @@ export function calcMaterials(
     // Wall paint or wallpaper
     const wallMat = matMap.get(room.wallMat);
     if (wallMat) {
-      let lossRatio = 0;
-      if (room.wallMat === 'paint') {
-        lossRatio = 0.05;
-      }
-      if (room.wallMat === 'wallpaper') {
-        lossRatio = 0.05;
-      }
-      if (room.wallMat === 'tile_300') {
-        lossRatio = 0.05;
-      }
-      const configured = wallMat.lossRate;
-      const qty = netWallArea * (1 + (configured > 0 ? lossRatio : configured));
-      const detail = `房间"${room.name}"墙面: (${perim.toFixed(0)}mm×${room.heightMm}mm - ${openingArea.toFixed(0)}mm²) × (1+${(wallMat.lossRate * 100).toFixed(0)}%) = ${qty.toFixed(2)}${wallMat.unit}`;
+      const qty = wall.netAreaM2 * (1 + wallMat.lossRate);
+      const detail = `房间"${room.name}"墙面: (${wall.perimMm.toFixed(0)}mm×${room.heightMm}mm - ${wall.openingAreaMm2.toFixed(0)}mm²) = ${wall.netAreaM2.toFixed(2)}m² × (1+${(wallMat.lossRate * 100).toFixed(0)}%) = ${qty.toFixed(2)}${wallMat.unit}`;
       results.push({
         matId: wallMat.id,
         name: wallMat.name,
