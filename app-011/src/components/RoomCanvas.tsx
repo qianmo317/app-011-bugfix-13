@@ -1,5 +1,6 @@
 import type { Pt, Room, Opening } from '../types';
-import { polygonArea, dist, getWallSegments } from '../utils/geometry';
+import { dist, getWallSegments } from '../utils/geometry';
+import { getRoomFloorAreaM2 } from '../utils/roomCalc';
 
 interface Props {
   rooms: Room[];
@@ -52,7 +53,7 @@ export default function RoomCanvas({
         const isSelected = room.id === selectedRoomId;
         const centerX = room.polygon.reduce((s, p) => s + p.x, 0) / room.polygon.length;
         const centerY = room.polygon.reduce((s, p) => s + p.y, 0) / room.polygon.length;
-        const area = polygonArea(room.polygon);
+        const area = getRoomFloorAreaM2(room);
 
         return (
           <g key={room.id} onClick={() => onSelectRoom(room.id)} style={{ cursor: 'pointer' }}>

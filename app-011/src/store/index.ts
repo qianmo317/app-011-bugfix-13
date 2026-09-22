@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Plan, Room, Opening, Outlet, MatSpec } from '../types';
 import { DEFAULT_MATS } from '../utils/materialCalc';
+import { isValidRoomHeightMm } from '../utils/roomCalc';
 
 interface AppState {
   plans: Plan[];
@@ -69,11 +70,18 @@ export const useStore = create<AppState>((set, get) => ({
 
   updateRoom: (planId, roomId, updater) =>
     set((state) => ({
-      plans: state.plans.map((p) =>
-        p.id === planId
-          ? { ...p, rooms: p.rooms.map((r) => (r.id === roomId ? updater(r) : r)) }
-          : p
-      ),
+      plans: state.plans.map((p) => {
+        if (p.id !== planId) return p;
+
+        return {
+          ...p,
+          rooms: p.rooms.map((room) => {
+            if (room.id !== roomId) return room;
+            const updatedRoom = updater(room);
+            return isValidRoomHeightMm(String(updatedRoom.heightMm)) ? updatedRoom : room;
+          }),
+        };
+      }),
     })),
 
   deleteRoom: (planId, roomId) =>

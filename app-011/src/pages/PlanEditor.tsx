@@ -2,7 +2,8 @@ import { useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStore } from '../store';
 import type { Pt, Room } from '../types';
-import { polygonArea, polygonPerimeter, snapAngle, dist } from '../utils/geometry';
+import { polygonPerimeter, snapAngle, dist } from '../utils/geometry';
+import { getRoomFloorAreaM2, isValidRoomHeightMm } from '../utils/roomCalc';
 import RoomCanvas from '../components/RoomCanvas';
 import OpeningEditor from '../components/OpeningEditor';
 
@@ -18,6 +19,7 @@ export default function PlanEditor() {
   const [roomHeight, setRoomHeight] = useState('2800');
   const [floorMat, setFloorMat] = useState('floor');
   const [wallMat, setWallMat] = useState('paint');
+  const [heightError, setHeightError] = useState('');
   const svgRef = useRef<SVGSVGElement>(null);
 
   const selectedRoom = plan?.rooms.find((r) => r.id === selectedRoomId);
@@ -70,6 +72,12 @@ export default function PlanEditor() {
 
   const updateSelectedRoom = () => {
     if (!plan || !selectedRoomId) return;
+    if (!isValidRoomHeightMm(roomHeight)) {
+      setHeightError('请输入大于 0 的层高（mm）');
+      return;
+    }
+
+    setHeightError('');
     updateRoom(plan.id, selectedRoomId, (r) => ({
       ...r,
       name: roomName || r.name,
@@ -79,7 +87,7 @@ export default function PlanEditor() {
     }));
   };
 
-  const totalArea = plan?.rooms.reduce((s, r) => s + polygonArea(r.polygon), 0) || 0;
+  const totalArea = plan?.rooms.reduce((s, r) => s + getRoomFloorAreaM2(r), 0) || 0;
   const totalPerim = plan?.rooms.reduce((s, r) => s + polygonPerimeter(r.polygon), 0) || 0;
 
   if (!plan) {
@@ -167,6 +175,7 @@ export default function PlanEditor() {
                   setRoomHeight(String(room.heightMm));
                   setFloorMat(room.floorMat);
                   setWallMat(room.wallMat);
+                  setHeightError('');
                 }
               }}
               drawingPoints={drawingPoints}
@@ -190,7 +199,15 @@ export default function PlanEditor() {
               </div>
               <div className="form-group">
                 <label>层高 (mm)</label>
-                <input value={roomHeight} onChange={(e) => setRoomHeight(e.target.value)} />
+                <input
+                  value={roomHeight}
+                  onChange={(e) => {
+                    setRoomHeight(e.target.value);
+                    setHeightError('');
+                  }}
+                  aria-invalid={Boolean(heightError)}
+                />
+                {heightError && <div style={{ marginTop: 4, color: '#e74c3c', fontSize: 12 }}>{heightError}</div>}
               </div>
               <div className="form-group">
                 <label>地面材质</label>
@@ -225,7 +242,7 @@ export default function PlanEditor() {
                 </button>
               </div>
               <div style={{ marginTop: 12, fontSize: 12, color: '#666' }}>
-                <div>面积: {polygonArea(selectedRoom.polygon).toFixed(2)} m²</div>
+                <div>面积: {getRoomFloorAreaM2(selectedRoom).toFixed(2)} m²</div>
                 <div>周长: {polygonPerimeter(selectedRoom.polygon).toFixed(0)} mm</div>
               </div>
             </div>

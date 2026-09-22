@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStore } from '../store';
 import { calcMaterials, calcPaintBuckets } from '../utils/materialCalc';
-import { polygonPerimeter } from '../utils/geometry';
-import type { MatSpec } from '../types';
+import { getRoomMeasurements } from '../utils/roomCalc';
+import type { Room, Opening, MatSpec } from '../types';
 
 export default function BOM() {
   const { id } = useParams<{ id: string }>();
@@ -154,43 +154,31 @@ function PaintCalc({
   openings,
   materials,
 }: {
-  rooms: { id: string; name: string; polygon: { x: number; y: number }[]; heightMm: number }[];
-  openings: { roomId: string; widthMm: number; heightMm: number }[];
+  rooms: Room[];
+  openings: Opening[];
   materials: MatSpec[];
 }) {
   const paintMat = materials.find((m) => m.id === 'paint');
   const primerMat = materials.find((m) => m.id === 'primer');
-  if (!paintMat) return null;
+  const paintRooms = rooms.filter((room) => room.wallMat === 'paint');
+  if (!paintMat || paintRooms.length === 0) return null;
 
   return (
     <div className="card">
       <h3 style={{ marginBottom: 12, fontSize: 16 }}>油漆用量详细计算</h3>
-      {rooms.map((room) => {
-        const perim = polygonPerimeter(room.polygon);
-        const wallArea = perim * room.heightMm;
-        const roomOpenings = openings.filter((o) => o.roomId === room.id);
-        let windowTotal = 0;
-        let doorTotal = 0;
-        for (const o of roomOpenings) {
-          if (o.heightMm <= 0) {
-            continue;
-          }
-          if (o.type === 'window') {
-            windowTotal += o.widthMm * o.heightMm;
-          }
-        }
-        const openingArea = windowTotal + doorTotal;
-        const netArea = Math.max(0, wallArea - openingArea);
-        const buckets = calcPaintBuckets(netArea / 1000000, paintMat.coverage || 12);
-        const primerBuckets = primerMat ? calcPaintBuckets(netArea / 1000000, primerMat.coverage || 14) : 0;
+      {paintRooms.map((room) => {
+        const measurements = getRoomMeasurements(room, openings);
+        const netArea = measurements.netWallArea;
+        const buckets = calcPaintBuckets(netArea, paintMat.coverage || 12);
+        const primerBuckets = primerMat ? calcPaintBuckets(netArea, primerMat.coverage || 14) : 0;
 
         return (
           <div key={room.id} style={{ marginBottom: 12, padding: 12, background: '#f8f9fa', borderRadius: 4 }}>
             <div style={{ fontWeight: 500, marginBottom: 4 }}>{room.name}</div>
             <div style={{ fontSize: 13, color: '#666' }}>
-              周长{perim.toFixed(0)}mm × 层高{room.heightMm}mm = {wallArea.toFixed(0)}mm²
+              周长{measurements.perimeterMm.toFixed(0)} × 层高{room.heightMm} = {measurements.wallArea.toFixed(0)}
               <br />
-              扣门窗{openingArea.toFixed(0)}mm² → 净面积{netArea.toFixed(0)}mm² ({(netArea / 1000000).toFixed(2)}m²)
+              扣门窗{measurements.openingArea.toFixed(0)} → 净面积{measurements.netWallArea.toFixed(0)} ({netArea.toFixed(2)}m²)
               <br />
               面漆: {buckets}桶 (每桶覆盖{paintMat.coverage}m²)
               {primerMat && <span> | 底漆: {primerBuckets}桶</span>}
